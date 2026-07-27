@@ -15,7 +15,7 @@
   --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", monospace;
 
   --gutter: clamp(1rem, 4vw, 2.5rem);
-  --track-w: 260px;
+  --track-w: 280px;
 }
 
 * {
@@ -176,47 +176,84 @@ button {
   cursor: not-allowed;
 }
 
-/* ── Sort control ────────────────────────────────────── */
+/* ── Toolbar ─────────────────────────────────────────── */
 
-.sorter {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  background: var(--ink-850);
-  border: 1px solid var(--ink-700);
-  border-radius: 999px;
-}
-
-.sorter button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.sorter button[aria-pressed="true"] {
-  background: var(--ink-700);
-  color: var(--paper);
-}
-
-/* ── Axis header ─────────────────────────────────────── */
-
-.axis-head {
+.toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.75rem 0 0.5rem;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.subbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.search {
+  width: min(280px, 100%);
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  background: var(--ink-850);
+  border: 1px solid var(--ink-700);
+  border-radius: 999px;
+  margin-bottom: 0;
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--ink-700);
+  color: var(--paper);
+}
+
+.segmented-quiet {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+}
+
+.segmented .count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 0.3rem;
+}
+
+.segmented button[aria-pressed="true"] .count {
+  color: var(--paper);
+}
+
+form .segmented {
+  display: flex;
+  margin-bottom: 1.1rem;
 }
 
 .axis-key {
   display: flex;
   gap: 1rem;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -235,19 +272,6 @@ button {
   display: inline-block;
 }
 
-.axis-ruler {
-  display: none;
-  width: var(--track-w);
-  flex: none;
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  color: var(--muted);
-  border-bottom: 1px solid var(--ink-700);
-  padding-bottom: 0.3rem;
-}
-
 /* ── Film rows ───────────────────────────────────────── */
 
 .reel {
@@ -258,13 +282,13 @@ button {
 
 .film {
   display: grid;
-  grid-template-columns: 54px 1fr;
+  grid-template-columns: 54px 1fr auto;
   grid-template-areas:
-    "poster meta"
-    "track track";
+    "poster meta edit"
+    "track  track track";
   gap: 0.9rem 1rem;
-  align-items: center;
-  padding: 1.1rem 0;
+  align-items: start;
+  padding: 1.25rem 0;
   border-bottom: 1px solid var(--ink-800);
 }
 
@@ -284,6 +308,7 @@ button {
   color: var(--ink-600);
   font-family: var(--font-mono);
   font-size: 0.65rem;
+  text-align: center;
 }
 
 .film-meta {
@@ -292,10 +317,14 @@ button {
 }
 
 .film-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.05rem;
   letter-spacing: -0.015em;
+  line-height: 1.25;
   margin: 0;
 }
 
@@ -304,7 +333,11 @@ button {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 400;
-  margin-left: 0.4rem;
+  margin-left: 0.45rem;
+}
+
+.film-title .stink {
+  align-self: center;
 }
 
 .film-sub {
@@ -312,132 +345,311 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   font-size: 0.8rem;
   color: var(--muted);
 }
 
+.film-sub > span + span::before {
+  content: "·";
+  margin-right: 0.5rem;
+  color: var(--ink-600);
+}
+
+.film-pick[data-owner="a"] {
+  color: var(--amber);
+}
+.film-pick[data-owner="b"] {
+  color: var(--teal);
+}
+
 .film-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
   font-style: italic;
+  max-width: 46ch;
 }
 
 .film-track {
   grid-area: track;
 }
 
-/* ── The divergence track (signature element) ────────── */
+.film-queued .film-track {
+  display: flex;
+  justify-content: flex-start;
+}
 
-.gauge {
+/* ── Stink meter ─────────────────────────────────────── */
+
+.stink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.12rem 0.5rem 0.12rem 0.34rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  vertical-align: 0.12em;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+
+.stink-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.stink-word {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.62rem;
+  opacity: 0.9;
+}
+
+.stink[data-size="lg"] {
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem 0.3rem 0.6rem;
+  font-size: 1rem;
+  margin-left: 0;
+}
+
+.stink[data-size="lg"] .stink-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.stink[data-size="lg"] .stink-word {
+  font-size: 0.7rem;
+}
+
+.tally-headline {
+  padding-right: 0.5rem;
+}
+
+.tally-headline .stink {
+  margin-bottom: 0.1rem;
+}
+
+/* ── Stink meter legend ──────────────────────────────── */
+
+.legend {
+  position: relative;
+}
+
+.legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--ink-700);
+  background: var(--ink-850);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.legend-toggle:hover {
+  color: var(--paper);
+  border-color: var(--muted);
+}
+
+.legend-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 5;
+  list-style: none;
+  margin: 0;
+  padding: 0.6rem;
+  min-width: 260px;
+  background: var(--ink-850);
+  border: 1px solid var(--ink-700);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.legend-list li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.25rem;
+}
+
+.legend-list .stink {
+  margin-left: 0;
+}
+
+.legend-name {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.legend-blurb {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.subbar-right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
-.gauge-rail {
+/* ── Rating lanes (signature element) ────────────────── */
+
+.lanes {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) 1fr 58px;
+  grid-template-rows: auto auto;
+  column-gap: 0.6rem;
+  row-gap: 0.4rem;
+  align-items: center;
+}
+
+.lanes[data-busy="true"] {
+  opacity: 0.5;
+}
+
+.lane-band {
+  grid-column: 2;
+  grid-row: 1 / 3;
   position: relative;
-  flex: 1;
-  height: 34px;
+  align-self: stretch;
+  z-index: 0;
 }
 
-.gauge-rail::before {
+.lane-band i {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(242, 169, 59, 0.16),
+    rgba(82, 199, 190, 0.16)
+  );
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lane-who {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 92px;
+}
+
+.lane-who[data-owner="a"] {
+  color: var(--amber);
+}
+.lane-who[data-owner="b"] {
+  color: var(--teal);
+}
+
+.lane-bar {
+  position: relative;
+  height: 16px;
+  z-index: 1;
+}
+
+.lane-bar::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
-  height: 1px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
   background: var(--ink-700);
 }
 
-.gauge-span {
+.lane-bar[data-empty="true"]::before {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink-700) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.lane-fill {
   position: absolute;
+  left: 0;
   top: 50%;
-  height: 3px;
-  margin-top: -1.5px;
+  height: 2px;
+  margin-top: -1px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--amber), var(--teal));
-  opacity: 0.55;
 }
 
-.gauge-span[data-flip="true"] {
-  background: linear-gradient(90deg, var(--teal), var(--amber));
-}
-
-.gauge-pin {
+.lane-cap {
   position: absolute;
   top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
   transform: translate(-50%, -50%);
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  border-radius: 50%;
-}
-
-.gauge-pin::after {
-  content: "";
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
   border: 2px solid var(--ink-900);
-  transition: transform 0.15s ease;
 }
 
-.gauge-pin[data-owner="a"]::after {
+.lane-bar[data-owner="a"] .lane-fill,
+.lane-bar[data-owner="a"] .lane-cap {
   background: var(--amber);
 }
-.gauge-pin[data-owner="b"]::after {
+
+.lane-bar[data-owner="b"] .lane-fill,
+.lane-bar[data-owner="b"] .lane-cap {
   background: var(--teal);
 }
-.gauge-pin:hover::after {
-  transform: scale(1.25);
-}
 
-.gauge-pin[data-stacked="true"] {
-  margin-top: -9px;
-}
-.gauge-pin[data-stacked="true"] + .gauge-pin[data-stacked="true"] {
-  margin-top: 9px;
-}
-
-.gauge-readout {
-  display: flex;
-  gap: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.rating-pick {
+.lane-score {
+  width: 100%;
   appearance: none;
   -webkit-appearance: none;
-  background: transparent;
-  border: 0;
-  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
-  padding: 0.1rem 0.3rem;
-  border-radius: 4px;
+  text-align: center;
+  text-align-last: center;
+  padding: 0.2rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--ink-600);
+  background: var(--ink-850);
   cursor: pointer;
 }
 
-.rating-pick:hover {
-  background: var(--ink-800);
-}
-
-.rating-pick[data-owner="a"] {
+.lane-score[data-owner="a"] {
   color: var(--amber);
 }
-.rating-pick[data-owner="b"] {
+.lane-score[data-owner="b"] {
   color: var(--teal);
 }
-.rating-pick[data-empty="true"] {
-  color: var(--ink-600);
+
+.lane-score[data-empty="true"] {
+  color: var(--muted);
+  border-style: dashed;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
-.rating-pick option {
+.lane-score:hover {
+  border-color: var(--muted);
+}
+
+.lane-score option {
   background: var(--ink-800);
   color: var(--paper);
 }
@@ -456,19 +668,32 @@ button {
 
 /* ── Empty & row controls ────────────────────────────── */
 
-.film-remove {
-  border: 0;
+.film-edit {
+  grid-area: edit;
+  justify-self: end;
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--ink-600);
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  line-height: 1;
+  color: var(--muted);
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
 }
 
-.film-remove:hover {
-  color: var(--danger);
+.film-edit:hover {
+  color: var(--paper);
+  border-color: var(--ink-600);
   background: var(--ink-800);
+}
+
+.btn-danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(228, 106, 106, 0.12);
+  border-color: var(--danger);
 }
 
 .blank-slate {
@@ -673,28 +898,14 @@ button {
 /* ── Wide screens ────────────────────────────────────── */
 
 @media (min-width: 760px) {
-  .axis-ruler {
-    display: flex;
-  }
-
   .film {
     grid-template-columns: 54px 1fr var(--track-w) auto;
-    grid-template-areas: "poster meta track remove";
-    gap: 1.25rem;
+    grid-template-areas: "poster meta track edit";
+    gap: 1.5rem;
   }
 
   .film-track {
     width: var(--track-w);
-  }
-
-  .gauge {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.15rem;
-  }
-
-  .gauge-readout {
-    justify-content: space-between;
   }
 }
 

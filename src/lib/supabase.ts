@@ -6,7 +6,7 @@ const key = process.env.SUPABASE_SECRET_KEY;
 
 if (!url || !key) {
   throw new Error(
-    "Missing SUPABASE_URL or SUPABASE_SECRET_KEY. Copy .env.example to .env.local and fill it in.",
+    "Missing SUPABASE_URL or SUPABASE_SECRET_KEY. Copy .env.example to .env.local and fill it in."
   );
 }
 
@@ -20,7 +20,10 @@ export type Movie = {
   title: string;
   year: number | null;
   poster_path: string | null;
-  watched_on: string;
+  runtime: number | null;
+  status: "watched" | "watchlist";
+  picked_by: "a" | "b" | null;
+  watched_on: string | null;
   rating_a: number | null;
   rating_b: number | null;
   note: string | null;

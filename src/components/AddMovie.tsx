@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addMovie } from "@/app/actions";
-import type { TmdbHit } from "@/app/api/tmdb/route";
-import { PERSON_A, PERSON_B, POSTER, SCALE, formatRating } from "@/lib/people";
+import type { TmdbHit } from "@/lib/tmdb";
+import { POSTER } from "@/lib/people";
+import Dialog from "./Dialog";
+import { DateField, NoteField, PickerField, RatingFields } from "./FormFields";
 
-const today = () => new Date().toISOString().slice(0, 10);
+type Mode = "watched" | "watchlist";
 
 export default function AddMovie() {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
-
+  const [mode, setMode] = useState<Mode>("watched");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<TmdbHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -19,14 +20,7 @@ export default function AddMovie() {
   const [saving, startSaving] = useTransition();
 
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  useEffect(() => {
-    if (picked) return;
+    if (!open || picked) return;
     const term = query.trim();
     if (term.length < 2) {
       setHits([]);
@@ -42,7 +36,7 @@ export default function AddMovie() {
         });
         const data = await response.json();
         setHits(data.results ?? []);
-      } catch (err) {
+      } catch {
         if (!controller.signal.aborted) setHits([]);
       } finally {
         if (!controller.signal.aborted) setSearching(false);
@@ -53,7 +47,7 @@ export default function AddMovie() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [query, picked]);
+  }, [query, picked, open]);
 
   const reset = () => {
     setQuery("");
@@ -65,6 +59,7 @@ export default function AddMovie() {
   const close = () => {
     setOpen(false);
     reset();
+    setMode("watched");
   };
 
   const save = (formData: FormData) => {
@@ -84,163 +79,133 @@ export default function AddMovie() {
         Add a film
       </button>
 
-      <dialog className="sheet" ref={dialogRef} onClose={close}>
-        <div className="sheet-head">
-          <h2>Add a film</h2>
-          <button className="btn btn-quiet" type="button" onClick={close}>
-            Close
-          </button>
-        </div>
+      <Dialog open={open} title="Add a film" onClose={close}>
+        {!picked ? (
+          <>
+            <label className="field">
+              <span className="field-label">Search</span>
+              <input
+                className="input"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Start typing a title"
+                autoFocus
+              />
+            </label>
 
-        <div className="sheet-body">
-          {!picked ? (
-            <>
-              <label className="field">
-                <span className="field-label">Search</span>
-                <input
-                  className="input"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Start typing a title"
-                  autoFocus
-                />
-              </label>
+            {hits.length > 0 ? (
+              <ul className="results">
+                {hits.map((hit) => {
+                  const thumb = POSTER(hit.poster_path, "w92");
+                  return (
+                    <li key={hit.tmdb_id}>
+                      <button className="result" type="button" onClick={() => setPicked(hit)}>
+                        {thumb ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={thumb} alt="" width={34} height={51} />
+                        ) : (
+                          <span aria-hidden="true" style={{ width: 34, height: 51 }} />
+                        )}
+                        <span>
+                          <span className="result-title">{hit.title}</span>{" "}
+                          <span className="result-year">{hit.year ?? ""}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
 
-              {hits.length > 0 ? (
-                <ul className="results">
-                  {hits.map((hit) => {
-                    const thumb = POSTER(hit.poster_path, "w92");
-                    return (
-                      <li key={hit.tmdb_id}>
-                        <button
-                          className="result"
-                          type="button"
-                          onClick={() => setPicked(hit)}
-                        >
-                          {thumb ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={thumb} alt="" width={34} height={51} />
-                          ) : (
-                            <span aria-hidden="true" style={{ width: 34, height: 51 }} />
-                          )}
-                          <span>
-                            <span className="result-title">{hit.title}</span>{" "}
-                            <span className="result-year">{hit.year ?? ""}</span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
+            {searching ? <p className="hint">Searching TMDB…</p> : null}
 
-              {searching ? <p className="hint">Searching TMDB…</p> : null}
-
-              {!searching && query.trim().length >= 2 && hits.length === 0 ? (
-                <p className="hint">
-                  Nothing on TMDB matches that.{" "}
-                  <button
-                    className="btn btn-quiet"
-                    type="button"
-                    onClick={() =>
-                      setPicked({
-                        tmdb_id: 0,
-                        title: query.trim(),
-                        year: null,
-                        poster_path: null,
-                      })
-                    }
-                  >
-                    Add &ldquo;{query.trim()}&rdquo; anyway
-                  </button>
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <form action={save}>
-              <div className="picked">
-                {pickedPoster ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pickedPoster} alt="" width={44} height={66} />
-                ) : null}
-                <span>
-                  <span className="picked-title">{picked.title}</span>
-                  {picked.year ? <span className="film-year">{picked.year}</span> : null}
-                </span>
+            {!searching && query.trim().length >= 2 && hits.length === 0 ? (
+              <p className="hint">
+                Nothing on TMDB matches that.{" "}
                 <button
                   className="btn btn-quiet"
                   type="button"
-                  onClick={reset}
-                  style={{ marginLeft: "auto" }}
+                  onClick={() =>
+                    setPicked({ tmdb_id: 0, title: query.trim(), year: null, poster_path: null })
+                  }
                 >
-                  Change
+                  Add &ldquo;{query.trim()}&rdquo; anyway
                 </button>
-              </div>
-
-              <input type="hidden" name="title" value={picked.title} />
-              <input type="hidden" name="year" value={picked.year ?? ""} />
-              <input type="hidden" name="tmdb_id" value={picked.tmdb_id || ""} />
-              <input type="hidden" name="poster_path" value={picked.poster_path ?? ""} />
-
-              <label className="field">
-                <span className="field-label">Watched on</span>
-                <input className="input" type="date" name="watched_on" defaultValue={today()} />
-              </label>
-
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">{PERSON_A}</span>
-                  <select className="select" name="rating_a" defaultValue="">
-                    <option value="">Not yet</option>
-                    {SCALE.map((score) => (
-                      <option key={score} value={score}>
-                        {formatRating(score)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span className="field-label">{PERSON_B}</span>
-                  <select className="select" name="rating_b" defaultValue="">
-                    <option value="">Not yet</option>
-                    {SCALE.map((score) => (
-                      <option key={score} value={score}>
-                        {formatRating(score)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="field">
-                <span className="field-label">Note</span>
-                <input
-                  className="input"
-                  name="note"
-                  placeholder="One line you'll want to remember"
-                  maxLength={120}
-                />
-              </label>
-
-              {error ? (
-                <p className="hint" data-tone="error">
-                  {error}
-                </p>
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <form action={save}>
+            <div className="picked">
+              {pickedPoster ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={pickedPoster} alt="" width={44} height={66} />
               ) : null}
+              <span>
+                <span className="picked-title">{picked.title}</span>
+                {picked.year ? <span className="film-year">{picked.year}</span> : null}
+              </span>
+              <button
+                className="btn btn-quiet"
+                type="button"
+                onClick={reset}
+                style={{ marginLeft: "auto" }}
+              >
+                Change
+              </button>
+            </div>
 
-              <div className="sheet-foot">
-                <button className="btn" type="button" onClick={close}>
-                  Cancel
-                </button>
-                <button className="btn btn-primary" type="submit" disabled={saving}>
-                  {saving ? "Saving…" : "Add to the list"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </dialog>
+            <div className="segmented" role="group" aria-label="Where does this go?">
+              <button
+                type="button"
+                aria-pressed={mode === "watched"}
+                onClick={() => setMode("watched")}
+              >
+                We watched it
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === "watchlist"}
+                onClick={() => setMode("watchlist")}
+              >
+                Save for later
+              </button>
+            </div>
+
+            <input type="hidden" name="status" value={mode} />
+            <input type="hidden" name="title" value={picked.title} />
+            <input type="hidden" name="year" value={picked.year ?? ""} />
+            <input type="hidden" name="tmdb_id" value={picked.tmdb_id || ""} />
+            <input type="hidden" name="poster_path" value={picked.poster_path ?? ""} />
+
+            <PickerField />
+
+            {mode === "watched" ? (
+              <>
+                <DateField />
+                <RatingFields />
+              </>
+            ) : null}
+
+            <NoteField />
+
+            {error ? (
+              <p className="hint" data-tone="error">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="sheet-foot">
+              <button className="btn" type="button" onClick={close}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={saving}>
+                {saving ? "Saving…" : mode === "watched" ? "Add to the log" : "Add to watchlist"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Dialog>
     </>
   );
 }

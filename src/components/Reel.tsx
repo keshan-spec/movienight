@@ -2,17 +2,21 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { Movie } from "@/lib/supabase";
-import { removeMovie, setRating } from "@/app/actions";
+import { markWatched } from "@/app/actions";
 import {
-  PERSON_A,
-  PERSON_B,
+  PEOPLE,
   POSTER,
-  SCALE,
-  axisPercent,
-  formatRating,
+  formatRuntime,
   formatWatched,
+  personName,
 } from "@/lib/people";
+import { stinkScore } from "@/lib/stink";
+import RatingLanes from "./RatingLanes";
+import EditMovie from "./EditMovie";
+import StinkBadge from "./StinkBadge";
+import StinkLegend from "./StinkLegend";
 
+type Tab = "watched" | "watchlist";
 type SortKey = "recent" | "gap" | "best";
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -35,210 +39,213 @@ function meanOf(m: Movie): number | null {
 }
 
 export default function Reel({ movies }: { movies: Movie[] }) {
+  const [tab, setTab] = useState<Tab>("watched");
   const [sort, setSort] = useState<SortKey>("recent");
+  const [term, setTerm] = useState("");
 
-  const ordered = useMemo(() => {
-    const list = [...movies];
-    if (sort === "gap") {
-      return list.sort((x, y) => (gapOf(y) ?? -1) - (gapOf(x) ?? -1));
+  const watched = useMemo(
+    () => movies.filter((m) => m.status === "watched"),
+    [movies],
+  );
+  const queued = useMemo(
+    () => movies.filter((m) => m.status === "watchlist"),
+    [movies],
+  );
+
+  const shown = useMemo(() => {
+    const source = tab === "watched" ? watched : queued;
+    const needle = term.trim().toLowerCase();
+    const filtered = needle
+      ? source.filter(
+          (m) =>
+            m.title.toLowerCase().includes(needle) ||
+            (m.note ?? "").toLowerCase().includes(needle),
+        )
+      : [...source];
+
+    if (tab === "watchlist") {
+      return filtered.sort((x, y) => y.created_at.localeCompare(x.created_at));
     }
-    if (sort === "best") {
-      return list.sort((x, y) => (meanOf(y) ?? -1) - (meanOf(x) ?? -1));
-    }
-    return list.sort((x, y) => y.watched_on.localeCompare(x.watched_on));
-  }, [movies, sort]);
+    if (sort === "gap")
+      return filtered.sort((x, y) => (gapOf(y) ?? -1) - (gapOf(x) ?? -1));
+    if (sort === "best")
+      return filtered.sort((x, y) => (meanOf(y) ?? -1) - (meanOf(x) ?? -1));
+    return filtered.sort((x, y) =>
+      (y.watched_on ?? "").localeCompare(x.watched_on ?? ""),
+    );
+  }, [tab, watched, queued, term, sort]);
 
   return (
     <>
-      <div className="axis-head">
-        <div className="axis-key">
-          <span>
-            <i style={{ background: "var(--amber)" }} aria-hidden="true" />
-            {PERSON_A}
-          </span>
-          <span>
-            <i style={{ background: "var(--teal)" }} aria-hidden="true" />
-            {PERSON_B}
-          </span>
-        </div>
-        <div className="axis-ruler" aria-hidden="true">
-          <span>0</span>
-          <span>5</span>
-          <span>10</span>
-        </div>
-      </div>
-
-      <div className="sorter" role="group" aria-label="Sort films">
-        {SORTS.map((option) => (
+      <div className="toolbar">
+        <div className="segmented" role="group" aria-label="List">
           <button
-            key={option.key}
             type="button"
-            aria-pressed={sort === option.key}
-            onClick={() => setSort(option.key)}
+            aria-pressed={tab === "watched"}
+            onClick={() => setTab("watched")}
           >
-            {option.label}
+            Watched <span className="count">{watched.length}</span>
           </button>
-        ))}
+          <button
+            type="button"
+            aria-pressed={tab === "watchlist"}
+            onClick={() => setTab("watchlist")}
+          >
+            Watchlist <span className="count">{queued.length}</span>
+          </button>
+        </div>
+
+        <input
+          className="input search"
+          type="search"
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          placeholder="Search titles and notes"
+          aria-label="Search films"
+        />
       </div>
 
-      <ul className="reel">
-        {ordered.map((movie) => (
-          <FilmRow key={movie.id} movie={movie} />
-        ))}
-      </ul>
+      {tab === "watched" ? (
+        <div className="subbar">
+          <div
+            className="segmented segmented-quiet"
+            role="group"
+            aria-label="Sort films"
+          >
+            {SORTS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={sort === option.key}
+                onClick={() => setSort(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="subbar-right">
+            <div className="axis-key">
+              {PEOPLE.map((person) => (
+                <span key={person.key}>
+                  <i style={{ background: person.colour }} aria-hidden="true" />
+                  {person.name}
+                </span>
+              ))}
+            </div>
+            <StinkLegend />
+          </div>
+        </div>
+      ) : null}
+
+      {shown.length === 0 ? (
+        <div className="blank-slate">
+          <p>
+            {term.trim()
+              ? "Nothing matches that search."
+              : tab === "watched"
+                ? "Nothing logged yet. Add the first film you watched together."
+                : "Watchlist is empty. Add something you both want to see."}
+          </p>
+        </div>
+      ) : (
+        <ul className="reel">
+          {shown.map((movie) =>
+            tab === "watched" ? (
+              <FilmRow key={movie.id} movie={movie} />
+            ) : (
+              <QueuedRow key={movie.id} movie={movie} />
+            ),
+          )}
+        </ul>
+      )}
     </>
   );
 }
 
-function FilmRow({ movie }: { movie: Movie }) {
-  const [pending, startTransition] = useTransition();
-  const poster = POSTER(movie.poster_path, "w185");
+function Poster({ movie }: { movie: Movie }) {
+  const src = POSTER(movie.poster_path, "w185");
+  if (!src) {
+    return (
+      <span className="film-poster film-poster--blank" aria-hidden="true">
+        no art
+      </span>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      className="film-poster"
+      src={src}
+      alt=""
+      loading="lazy"
+      width={54}
+      height={81}
+    />
+  );
+}
 
-  const a = movie.rating_a;
-  const b = movie.rating_b;
-  const both = a !== null && b !== null;
-  const stacked = both && Math.abs(a - b) < 0.5;
-
-  const spanLeft = both ? axisPercent(Math.min(a, b)) : 0;
-  const spanWidth = both ? axisPercent(Math.abs(a - b)) : 0;
-
-  const update = (who: "a" | "b", raw: string) => {
-    const value = raw === "" ? null : Number(raw);
-    startTransition(async () => {
-      const result = await setRating(movie.id, who, value);
-      if (!result.ok) alert(result.message);
-    });
-  };
-
-  const remove = () => {
-    if (!confirm(`Remove ${movie.title} from the list?`)) return;
-    startTransition(async () => {
-      const result = await removeMovie(movie.id);
-      if (!result.ok) alert(result.message);
-    });
-  };
+function Meta({ movie }: { movie: Movie }) {
+  const runtime = formatRuntime(movie.runtime);
+  const picker = personName(movie.picked_by);
+  const overall = stinkScore(movie.rating_a, movie.rating_b);
 
   return (
-    <li className="film" style={{ opacity: pending ? 0.55 : 1 }}>
-      {poster ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          className="film-poster"
-          src={poster}
-          alt=""
-          loading="lazy"
-          width={54}
-          height={81}
-        />
-      ) : (
-        <span className="film-poster film-poster--blank" aria-hidden="true">
-          no art
-        </span>
-      )}
-
-      <div className="film-meta">
-        <h3 className="film-title">
-          {movie.title}
-          {movie.year ? <span className="film-year">{movie.year}</span> : null}
-        </h3>
-        <div className="film-sub">
+    <div className="film-meta">
+      <h3 className="film-title">
+        {movie.title}
+        {movie.year ? <span className="film-year">{movie.year}</span> : null}
+        {overall !== null ? <StinkBadge score={overall} /> : null}
+      </h3>
+      <div className="film-sub">
+        {movie.status === "watched" ? (
           <span>{formatWatched(movie.watched_on)}</span>
-          {movie.note ? <span className="film-note">{movie.note}</span> : null}
-        </div>
+        ) : null}
+        {runtime ? <span>{runtime}</span> : null}
+        {picker ? (
+          <span className="film-pick" data-owner={movie.picked_by}>
+            {picker}&rsquo;s pick
+          </span>
+        ) : null}
       </div>
+      {movie.note ? <p className="film-note">{movie.note}</p> : null}
+    </div>
+  );
+}
 
+function FilmRow({ movie }: { movie: Movie }) {
+  return (
+    <li className="film">
+      <Poster movie={movie} />
+      <Meta movie={movie} />
       <div className="film-track">
-        <div className="gauge">
-          <div className="gauge-rail">
-            {both && spanWidth > 0 ? (
-              <span
-                className="gauge-span"
-                data-flip={b < a ? "true" : "false"}
-                style={{ left: `${spanLeft}%`, width: `${spanWidth}%` }}
-                aria-hidden="true"
-              />
-            ) : null}
-            {a !== null ? (
-              <span
-                className="gauge-pin"
-                data-owner="a"
-                data-stacked={stacked ? "true" : "false"}
-                style={{ left: `${axisPercent(a)}%` }}
-                aria-hidden="true"
-              />
-            ) : null}
-            {b !== null ? (
-              <span
-                className="gauge-pin"
-                data-owner="b"
-                data-stacked={stacked ? "true" : "false"}
-                style={{ left: `${axisPercent(b)}%` }}
-                aria-hidden="true"
-              />
-            ) : null}
-          </div>
-
-          <div className="gauge-readout">
-            <RatingPicker
-              owner="a"
-              person={PERSON_A}
-              title={movie.title}
-              value={a}
-              onPick={(raw) => update("a", raw)}
-            />
-            <RatingPicker
-              owner="b"
-              person={PERSON_B}
-              title={movie.title}
-              value={b}
-              onPick={(raw) => update("b", raw)}
-            />
-          </div>
-        </div>
+        <RatingLanes movie={movie} />
       </div>
-
-      <button
-        className="film-remove"
-        type="button"
-        onClick={remove}
-        aria-label={`Remove ${movie.title}`}
-      >
-        ✕
-      </button>
+      <EditMovie movie={movie} />
     </li>
   );
 }
 
-function RatingPicker({
-  owner,
-  person,
-  title,
-  value,
-  onPick,
-}: {
-  owner: "a" | "b";
-  person: string;
-  title: string;
-  value: number | null;
-  onPick: (raw: string) => void;
-}) {
+function QueuedRow({ movie }: { movie: Movie }) {
+  const [busy, startBusy] = useTransition();
+
+  const promote = () => {
+    startBusy(async () => {
+      const result = await markWatched(movie.id);
+      if (!result.ok) alert(result.message);
+    });
+  };
+
   return (
-    <label>
-      <span className="sr-only">{`${person}'s rating for ${title}`}</span>
-      <select
-        className="rating-pick"
-        data-owner={owner}
-        data-empty={value === null ? "true" : "false"}
-        value={value === null ? "" : String(value)}
-        onChange={(event) => onPick(event.target.value)}
-      >
-        <option value="">—</option>
-        {SCALE.map((score) => (
-          <option key={score} value={score}>
-            {formatRating(score)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <li className="film film-queued">
+      <Poster movie={movie} />
+      <Meta movie={movie} />
+      <div className="film-track">
+        <button className="btn" type="button" onClick={promote} disabled={busy}>
+          {busy ? "Moving…" : "We watched it"}
+        </button>
+      </div>
+      <EditMovie movie={movie} />
+    </li>
   );
 }
