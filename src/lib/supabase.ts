@@ -21,6 +21,8 @@ export type Movie = {
   year: number | null;
   poster_path: string | null;
   runtime: number | null;
+  /** Undefined until migration-003 has been run. */
+  genres?: string[] | null;
   status: "watched" | "watchlist";
   picked_by: "a" | "b" | null;
   watched_on: string | null;

@@ -65,6 +65,13 @@ middleware.
 - **Pick for us** on the watchlist spins for a random film, starting with the
   suggestions of whoever's turn it is (picks alternate, based on the last
   watched film's "whose pick").
+- **Genres**: run `supabase/migration-003.sql` once to enable the genre filter.
+  Films you already have get their genres from TMDB automatically on the next
+  few page loads.
+- **For you** suggests films from TMDB's recommendations for the films you both
+  rated highest, skipping anything you've logged or saved. Lookalikes of your
+  flops are pushed down, and genres you score well get a boost. Click × to hide one
+  (remembered per browser), or **+ Watchlist** to save it.
 - Shortcuts: `N` adds a film, `/` jumps to search.
 - Deleting a film shows an **Undo** toast for a few seconds.
 - To back up, use **Export CSV** in the header, Supabase's table editor export, or

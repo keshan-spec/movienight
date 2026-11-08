@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db, type Movie } from "@/lib/supabase";
 import { hasSession } from "@/lib/auth";
-import { fetchRuntime } from "@/lib/tmdb";
+import { fetchMeta } from "@/lib/tmdb";
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -25,6 +25,11 @@ function cleanPicker(raw: FormDataEntryValue | null): "a" | "b" | null {
   return value === "a" || value === "b" ? value : null;
 }
 
+/** True when Postgres/PostgREST says the genres column doesn't exist yet. */
+function missingGenres(error: { message: string } | null): boolean {
+  return !!error && /genres/i.test(error.message) && /column/i.test(error.message);
+}
+
 function cleanText(raw: FormDataEntryValue | null): string | null {
   const value = String(raw ?? "").trim();
   return value || null;
@@ -42,12 +47,14 @@ export async function addMovie(formData: FormData): Promise<ActionResult> {
   const watched = String(formData.get("watched_on") ?? "").trim();
   const yearRaw = String(formData.get("year") ?? "").trim();
 
-  const { error } = await db.from("movies").insert({
+  const meta = tmdbId ? await fetchMeta(tmdbId) : null;
+
+  const row = {
     title,
     year: yearRaw ? Number(yearRaw) : null,
     tmdb_id: tmdbId,
     poster_path: cleanText(formData.get("poster_path")),
-    runtime: tmdbId ? await fetchRuntime(tmdbId) : null,
+    runtime: meta?.runtime ?? null,
     status,
     picked_by: cleanPicker(formData.get("picked_by")),
     watched_on:
@@ -55,7 +62,11 @@ export async function addMovie(formData: FormData): Promise<ActionResult> {
     rating_a: status === "watchlist" ? null : cleanRating(formData.get("rating_a")),
     rating_b: status === "watchlist" ? null : cleanRating(formData.get("rating_b")),
     note: cleanText(formData.get("note")),
-  });
+  };
+
+  let { error } = await db.from("movies").insert({ ...row, genres: meta?.genres ?? null });
+  // Before migration-003 there's no genres column, so save without it.
+  if (missingGenres(error)) ({ error } = await db.from("movies").insert(row));
 
   if (error) return { ok: false, message: error.message };
 
@@ -142,7 +153,7 @@ export async function restoreMovie(movie: Movie): Promise<ActionResult> {
   if (!(await hasSession())) return EXPIRED;
   if (!movie?.id || !movie.title) return { ok: false, message: "Nothing to restore." };
 
-  const { error } = await db.from("movies").insert({
+  const restored = {
     id: movie.id,
     tmdb_id: movie.tmdb_id,
     title: movie.title,
@@ -156,7 +167,12 @@ export async function restoreMovie(movie: Movie): Promise<ActionResult> {
     rating_b: movie.rating_b,
     note: movie.note,
     created_at: movie.created_at,
-  });
+  };
+
+  const withGenres: Record<string, unknown> =
+    movie.genres !== undefined ? { ...restored, genres: movie.genres } : restored;
+  let { error } = await db.from("movies").insert(withGenres);
+  if (missingGenres(error)) ({ error } = await db.from("movies").insert(restored));
 
   if (error) return { ok: false, message: error.message };
 

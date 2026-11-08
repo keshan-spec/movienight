@@ -1,5 +1,5 @@
 -- Fresh install: run this in the Supabase SQL editor.
--- Already have a movies table? Run migration-002.sql instead.
+-- Already have a movies table? Run migration-002.sql and migration-003.sql instead.
 
 create table if not exists public.movies (
   id           uuid primary key default gen_random_uuid(),
@@ -8,6 +8,7 @@ create table if not exists public.movies (
   year         integer,
   poster_path  text,
   runtime      integer,
+  genres       text[],
   status       text not null default 'watched' check (status in ('watched', 'watchlist')),
   picked_by    text check (picked_by in ('a', 'b')),
   watched_on   date default current_date,

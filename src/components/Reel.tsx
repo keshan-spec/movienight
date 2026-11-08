@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Movie } from "@/lib/supabase";
 import {
   PEOPLE,
@@ -19,8 +19,9 @@ import MarkWatched from "./MarkWatched";
 import Spin from "./Spin";
 import StinkBadge from "./StinkBadge";
 import StinkLegend from "./StinkLegend";
+import Suggestions from "./Suggestions";
 
-type Tab = "watched" | "watchlist";
+type Tab = "watched" | "watchlist" | "foryou";
 type View = "list" | "grid";
 type Show = "all" | "a" | "b" | "unrated";
 type WatchedSort = "recent" | "oldest" | "best" | "worst" | "gap" | "title";
@@ -59,13 +60,25 @@ function byScore(direction: 1 | -1) {
   };
 }
 
-export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b" | null }) {
+export default function Reel({
+  movies,
+  turn,
+  genresReady = true,
+}: {
+  movies: Movie[];
+  turn: "a" | "b" | null;
+  /** False until migration-003 adds the genres column. */
+  genresReady?: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("watched");
   const [view, setView] = useState<View>("list");
   const [watchedSort, setWatchedSort] = useState<WatchedSort>("recent");
   const [queueSort, setQueueSort] = useState<QueueSort>("added");
   const [show, setShow] = useState<Show>("all");
   const [year, setYear] = useState<string>("all");
+  const [genre, setGenre] = useState<string>("all");
+  const [suggestedGenres, setSuggestedGenres] = useState<string[]>([]);
+  const onSuggestedGenres = useCallback((list: string[]) => setSuggestedGenres(list), []);
   const [term, setTerm] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -106,12 +119,25 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
     return [...set].sort().reverse();
   }, [watched]);
 
+  const known = useMemo(
+    () => new Set(movies.map((m) => m.tmdb_id).filter(Boolean) as number[]),
+    [movies]
+  );
+
+  const genres = useMemo(() => {
+    if (tab === "foryou") return suggestedGenres;
+    const source = tab === "watched" ? watched : queued;
+    return [...new Set(source.flatMap((m) => m.genres ?? []))].sort();
+  }, [tab, watched, queued, suggestedGenres]);
+
   const switchTab = (next: Tab) => {
     setTab(next);
-    if (next === "watchlist" && show === "unrated") setShow("all");
+    setGenre("all");
+    if (next !== "watched" && show === "unrated") setShow("all");
   };
 
   const shown = useMemo(() => {
+    if (tab === "foryou") return [];
     const source = tab === "watched" ? watched : queued;
     const needle = term.trim().toLowerCase();
 
@@ -123,6 +149,7 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
       ) {
         return false;
       }
+      if (genre !== "all" && !(m.genres ?? []).includes(genre)) return false;
       if (show === "a" || show === "b") {
         if (m.picked_by !== show) return false;
       }
@@ -154,16 +181,30 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
       default:
         return filtered.sort(byRecent);
     }
-  }, [tab, watched, queued, term, show, year, watchedSort, queueSort]);
+  }, [tab, watched, queued, term, show, year, genre, watchedSort, queueSort]);
 
   const total = tab === "watched" ? watched.length : queued.length;
-  const filtering = term.trim() !== "" || show !== "all" || (tab === "watched" && year !== "all");
+  const filtering =
+    tab !== "foryou" &&
+    (term.trim() !== "" || show !== "all" || genre !== "all" || (tab === "watched" && year !== "all"));
 
   const clearFilters = () => {
     setTerm("");
     setShow("all");
     setYear("all");
+    setGenre("all");
   };
+
+  const genreChip =
+    genres.length > 0 ? (
+      <ChipSelect
+        label="Genre"
+        value={genre}
+        active={genre !== "all"}
+        onChange={setGenre}
+        options={[{ value: "all", label: "Any genre" }, ...genres.map((g) => ({ value: g, label: g }))]}
+      />
+    ) : null;
 
   return (
     <section className="reel-wrap">
@@ -183,9 +224,16 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
           >
             Watchlist <span className="count">{queued.length}</span>
           </button>
+          <button
+            type="button"
+            aria-pressed={tab === "foryou"}
+            onClick={() => switchTab("foryou")}
+          >
+            <span aria-hidden="true" className="sparkle">✦</span> For you
+          </button>
         </div>
 
-        <div className="toolbar-right">
+        <div className="toolbar-right" hidden={tab === "foryou"}>
           <label className="search-wrap">
             <span className="sr-only">Search films</span>
             <svg
@@ -244,6 +292,15 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
         </div>
       </div>
 
+      {tab === "foryou" ? (
+        <>
+          <div className="subbar">
+            <div className="filters">{genreChip}</div>
+          </div>
+          <Suggestions known={known} genre={genre} onGenres={onSuggestedGenres} />
+        </>
+      ) : (
+      <>
       <div className="subbar">
         <div className="filters">
           {tab === "watched" ? (
@@ -277,6 +334,8 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
             ]}
           />
 
+          {genreChip}
+
           {tab === "watched" && years.length > 1 ? (
             <ChipSelect
               label="Year"
@@ -294,6 +353,12 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
             <button className="btn btn-quiet btn-small" type="button" onClick={clearFilters}>
               Clear
             </button>
+          ) : null}
+
+          {!genresReady ? (
+            <span className="hint genre-hint">
+              Run <code>supabase/migration-003.sql</code> to filter by genre.
+            </span>
           ) : null}
         </div>
 
@@ -362,6 +427,8 @@ export default function Reel({ movies, turn }: { movies: Movie[]; turn: "a" | "b
             )
           )}
         </ul>
+      )}
+      </>
       )}
     </section>
   );

@@ -44,22 +44,83 @@ export async function searchMovies(query: string): Promise<TmdbHit[]> {
   }));
 }
 
-/** Runtime isn't in search results, so fetch it once when a film is saved. */
-export async function fetchRuntime(tmdbId: number): Promise<number | null> {
+/** Runtime and genres aren't in search results, so fetch them once when a film is saved. */
+export async function fetchMeta(
+  tmdbId: number
+): Promise<{ runtime: number | null; genres: string[] } | null> {
   const auth = headers();
   if (!auth || !tmdbId) return null;
 
   try {
-    const response = await fetch(`${BASE}/movie/${tmdbId}`, {
+    const response = await fetch(`${BASE}/movie/${tmdbId}?language=en-GB`, {
       headers: auth,
       next: { revalidate: 60 * 60 * 24 * 30 },
     });
     if (!response.ok) return null;
-    const data = (await response.json()) as { runtime?: number | null };
-    return data.runtime && data.runtime > 0 ? data.runtime : null;
+    const data = (await response.json()) as {
+      runtime?: number | null;
+      genres?: { name: string }[];
+    };
+    return {
+      runtime: data.runtime && data.runtime > 0 ? data.runtime : null,
+      genres: (data.genres ?? []).map((g) => g.name),
+    };
   } catch {
     return null;
   }
+}
+
+/** TMDB genre id → name. */
+export async function genreNames(): Promise<Map<number, string>> {
+  const auth = headers();
+  const map = new Map<number, string>();
+  if (!auth) return map;
+  try {
+    const response = await fetch(`${BASE}/genre/movie/list?language=en-GB`, {
+      headers: auth,
+      next: { revalidate: 60 * 60 * 24 * 7 },
+    });
+    if (!response.ok) return map;
+    const data = (await response.json()) as { genres?: { id: number; name: string }[] };
+    for (const g of data.genres ?? []) map.set(g.id, g.name);
+  } catch {}
+  return map;
+}
+
+export type TmdbListItem = {
+  id: number;
+  title: string;
+  release_date?: string;
+  poster_path: string | null;
+  overview?: string;
+  genre_ids?: number[];
+  vote_average?: number;
+  vote_count?: number;
+  popularity?: number;
+};
+
+async function list(path: string): Promise<TmdbListItem[]> {
+  const auth = headers();
+  if (!auth) throw new Error("TMDB_ACCESS_TOKEN is not set.");
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      headers: auth,
+      next: { revalidate: 60 * 60 * 24 },
+    });
+    if (!response.ok) return [];
+    const data = (await response.json()) as { results?: TmdbListItem[] };
+    return data.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function recommendationsFor(tmdbId: number): Promise<TmdbListItem[]> {
+  return list(`/movie/${tmdbId}/recommendations?language=en-GB&page=1`);
+}
+
+export function trending(): Promise<TmdbListItem[]> {
+  return list(`/trending/movie/week?language=en-GB`);
 }
 
 export type Provider = { name: string; logo_path: string | null };

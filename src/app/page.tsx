@@ -2,6 +2,7 @@ import { db, type Movie } from "@/lib/supabase";
 import { PEOPLE, formatHours, formatRating, personName } from "@/lib/people";
 import { stinkTier } from "@/lib/stink";
 import { nextPicker, summarise } from "@/lib/stats";
+import { backfillGenres, genresColumnExists } from "@/lib/suggest";
 import { signOutAction } from "./signin/actions";
 import AddMovie from "@/components/AddMovie";
 import Insights from "@/components/Insights";
@@ -18,6 +19,9 @@ export default async function HomePage() {
     .order("created_at", { ascending: false });
 
   const movies = (data ?? []) as Movie[];
+  const genresReady = genresColumnExists(movies) !== false;
+  if (genresReady) await backfillGenres(movies);
+
   const watched = movies.filter((m) => m.status === "watched");
   const stats = summarise(watched);
   const turn = nextPicker(watched);
@@ -118,7 +122,7 @@ export default async function HomePage() {
         </>
       ) : null}
 
-      <Reel movies={movies} turn={turn} />
+      <Reel movies={movies} turn={turn} genresReady={genresReady} />
 
       <footer className="foot">
         <span>

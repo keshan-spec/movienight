@@ -16,16 +16,25 @@ const IMG = (path: string | null, size: string) =>
 /** Wraps a poster or title so clicking it opens the TMDB details sheet. */
 export default function FilmDetails({
   movie,
+  film,
   className,
   children,
+  footer,
 }: {
-  movie: Movie;
+  /** A film from your list (shows your scores too)… */
+  movie?: Movie;
+  /** …or any TMDB film, e.g. a suggestion. */
+  film?: { tmdb_id: number; title: string };
   className?: string;
   children: React.ReactNode;
+  /** Extra actions at the bottom of the sheet. */
+  footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const tmdbId = movie?.tmdb_id ?? film?.tmdb_id ?? null;
+  const title = movie?.title ?? film?.title ?? "";
 
-  if (!movie.tmdb_id) return <>{children}</>;
+  if (!tmdbId) return <>{children}</>;
 
   return (
     <>
@@ -33,19 +42,19 @@ export default function FilmDetails({
         type="button"
         className={`details-trigger ${className ?? ""}`}
         onClick={() => setOpen(true)}
-        aria-label={`About ${movie.title}`}
+        aria-label={`About ${title}`}
       >
         {children}
       </button>
-      <Dialog open={open} title={movie.title} size="lg" onClose={() => setOpen(false)}>
-        <DetailsBody movie={movie} />
+      <Dialog open={open} title={title} size="lg" onClose={() => setOpen(false)}>
+        <DetailsBody id={tmdbId} movie={movie} />
+        {footer ? <div className="details-footer">{footer}</div> : null}
       </Dialog>
     </>
   );
 }
 
-function DetailsBody({ movie }: { movie: Movie }) {
-  const id = movie.tmdb_id as number;
+function DetailsBody({ id, movie }: { id: number; movie?: Movie }) {
   const [details, setDetails] = useState<TmdbDetails | null>(cache.get(id) ?? null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,32 +76,8 @@ function DetailsBody({ movie }: { movie: Movie }) {
     return () => controller.abort();
   }, [id]);
 
-  const overall = stinkScore(movie.rating_a, movie.rating_b);
-  const picker = personName(movie.picked_by);
+  const ours = movie ? <Ours movie={movie} /> : null;
 
-  const ours = (
-    <div className="details-ours">
-      {overall !== null ? <StinkBadge score={overall} size="lg" /> : null}
-      {movie.status === "watched" ? (
-        <dl className="details-scores">
-          {PEOPLE.map((person) => {
-            const v = person.key === "a" ? movie.rating_a : movie.rating_b;
-            return (
-              <div key={person.key}>
-                <dt style={{ color: person.colour }}>{person.name}</dt>
-                <dd data-owner={person.key}>{formatRating(v)}</dd>
-              </div>
-            );
-          })}
-        </dl>
-      ) : null}
-      <p className="details-when">
-        {movie.status === "watched" ? formatWatched(movie.watched_on) : "On the watchlist"}
-        {picker ? ` · ${picker}'s pick` : ""}
-      </p>
-      {movie.note ? <p className="film-note">{movie.note}</p> : null}
-    </div>
-  );
 
   if (error) {
     return (
@@ -120,7 +105,7 @@ function DetailsBody({ movie }: { movie: Movie }) {
   }
 
   const backdrop = IMG(details.backdrop_path, "w780");
-  const runtime = formatRuntime(details.runtime ?? movie.runtime);
+  const runtime = formatRuntime(details.runtime ?? movie?.runtime ?? null);
   const facts = [details.year, runtime, details.genres.slice(0, 3).join(", ")].filter(Boolean);
 
   return (
@@ -234,6 +219,35 @@ function ProviderRow({ label, list }: { label: string; list: Provider[] }) {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+function Ours({ movie }: { movie: Movie }) {
+  const overall = stinkScore(movie.rating_a, movie.rating_b);
+  const picker = personName(movie.picked_by);
+
+  return (
+    <div className="details-ours">
+      {overall !== null ? <StinkBadge score={overall} size="lg" /> : null}
+      {movie.status === "watched" ? (
+        <dl className="details-scores">
+          {PEOPLE.map((person) => {
+            const v = person.key === "a" ? movie.rating_a : movie.rating_b;
+            return (
+              <div key={person.key}>
+                <dt style={{ color: person.colour }}>{person.name}</dt>
+                <dd data-owner={person.key}>{formatRating(v)}</dd>
+              </div>
+            );
+          })}
+        </dl>
+      ) : null}
+      <p className="details-when">
+        {movie.status === "watched" ? formatWatched(movie.watched_on) : "On the watchlist"}
+        {picker ? ` · ${picker}'s pick` : ""}
+      </p>
+      {movie.note ? <p className="film-note">{movie.note}</p> : null}
     </div>
   );
 }
