@@ -1,23 +1,33 @@
 "use client";
 
-import { Fragment, useTransition } from "react";
+import { Fragment, useOptimistic, useTransition } from "react";
 import { setRating } from "@/app/actions";
 import type { Movie } from "@/lib/supabase";
 import { PEOPLE, SCALE, axisPercent, formatRating } from "@/lib/people";
+import { useToast } from "./Toast";
 
 export default function RatingLanes({ movie }: { movie: Movie }) {
   const [pending, startTransition] = useTransition();
+  const notify = useToast();
+  const [ratings, setOptimistic] = useOptimistic(
+    { a: movie.rating_a, b: movie.rating_b },
+    (state, change: { who: "a" | "b"; value: number | null }) => ({
+      ...state,
+      [change.who]: change.value,
+    })
+  );
 
-  const a = movie.rating_a;
-  const b = movie.rating_b;
+  const a = ratings.a;
+  const b = ratings.b;
   const both = a !== null && b !== null;
   const gap = both ? Math.abs(a - b) : 0;
 
   const update = (who: "a" | "b", raw: string) => {
     const value = raw === "" ? null : Number(raw);
     startTransition(async () => {
+      setOptimistic({ who, value });
       const result = await setRating(movie.id, who, value);
-      if (!result.ok) alert(result.message);
+      if (!result.ok) notify(result.message, { tone: "error" });
     });
   };
 

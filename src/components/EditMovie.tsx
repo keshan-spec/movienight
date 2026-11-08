@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { removeMovie, updateMovie } from "@/app/actions";
+import { removeMovie, restoreMovie, updateMovie } from "@/app/actions";
 import type { Movie } from "@/lib/supabase";
 import { POSTER } from "@/lib/people";
 import Dialog from "./Dialog";
 import { DateField, NoteField, PickerField, RatingFields } from "./FormFields";
+import { useToast } from "./Toast";
 
 export default function EditMovie({ movie }: { movie: Movie }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
+  const notify = useToast();
 
   const poster = POSTER(movie.poster_path, "w185");
 
@@ -18,17 +20,33 @@ export default function EditMovie({ movie }: { movie: Movie }) {
     setError(null);
     startBusy(async () => {
       const result = await updateMovie(formData);
-      if (result.ok) setOpen(false);
-      else setError(result.message);
+      if (result.ok) {
+        setOpen(false);
+        notify("Changes saved");
+      } else setError(result.message);
     });
   };
 
   const remove = () => {
-    if (!confirm(`Remove ${movie.title}? This can't be undone.`)) return;
+    const snapshot = { ...movie };
     startBusy(async () => {
       const result = await removeMovie(movie.id);
-      if (result.ok) setOpen(false);
-      else setError(result.message);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setOpen(false);
+      notify(`Removed ${snapshot.title}`, {
+        action: {
+          label: "Undo",
+          run: async () => {
+            const undo = await restoreMovie(snapshot);
+            notify(undo.ok ? `${snapshot.title} is back` : undo.message, {
+              tone: undo.ok ? "info" : "error",
+            });
+          },
+        },
+      });
     });
   };
 
@@ -41,7 +59,11 @@ export default function EditMovie({ movie }: { movie: Movie }) {
         aria-label={`Edit ${movie.title}`}
         title="Edit"
       >
-        Edit
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+          <path d="M13.5 6.5l4 4" />
+        </svg>
+        <span className="film-edit-label">Edit</span>
       </button>
 
       <Dialog open={open} title="Edit film" onClose={() => setOpen(false)}>

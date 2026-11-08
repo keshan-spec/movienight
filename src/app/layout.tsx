@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import ToastProvider from "@/components/Toast";
 
 const display = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -25,10 +26,17 @@ export const metadata: Metadata = {
   description: "Everything we've watched, and what we each made of it.",
 };
 
+export const viewport: Viewport = {
+  themeColor: "#150f1b",
+  colorScheme: "dark",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

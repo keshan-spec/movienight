@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/supabase";
+import { db, type Movie } from "@/lib/supabase";
 import { hasSession } from "@/lib/auth";
 import { fetchRuntime } from "@/lib/tmdb";
 
@@ -112,14 +112,51 @@ export async function setRating(
   return { ok: true };
 }
 
-/** Move a watchlist entry into the watched log, dated today. */
-export async function markWatched(id: string): Promise<ActionResult> {
+/** Move a watchlist entry into the watched log, with a date and any ratings. */
+export async function markWatched(formData: FormData): Promise<ActionResult> {
   if (!(await hasSession())) return EXPIRED;
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { ok: false, message: "Missing film id." };
+
+  const watched = String(formData.get("watched_on") ?? "").trim();
 
   const { error } = await db
     .from("movies")
-    .update({ status: "watched", watched_on: new Date().toISOString().slice(0, 10) })
+    .update({
+      status: "watched",
+      watched_on: watched || new Date().toISOString().slice(0, 10),
+      rating_a: cleanRating(formData.get("rating_a")),
+      rating_b: cleanRating(formData.get("rating_b")),
+    })
     .eq("id", id);
+
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/** Put a just-deleted film back exactly as it was (powers "Undo"). */
+export async function restoreMovie(movie: Movie): Promise<ActionResult> {
+  if (!(await hasSession())) return EXPIRED;
+  if (!movie?.id || !movie.title) return { ok: false, message: "Nothing to restore." };
+
+  const { error } = await db.from("movies").insert({
+    id: movie.id,
+    tmdb_id: movie.tmdb_id,
+    title: movie.title,
+    year: movie.year,
+    poster_path: movie.poster_path,
+    runtime: movie.runtime,
+    status: movie.status === "watchlist" ? "watchlist" : "watched",
+    picked_by: movie.picked_by === "a" || movie.picked_by === "b" ? movie.picked_by : null,
+    watched_on: movie.watched_on,
+    rating_a: movie.rating_a,
+    rating_b: movie.rating_b,
+    note: movie.note,
+    created_at: movie.created_at,
+  });
 
   if (error) return { ok: false, message: error.message };
 

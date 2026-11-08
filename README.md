@@ -60,5 +60,12 @@ middleware.
 - Ratings run 0.5–10 in half steps. Change `SCALE` in `src/lib/people.ts` if you
   want a different scale; the `check` constraint in the schema allows 0–10.
 - Editing a rating saves immediately — click the number on any row.
-- To back up, use Supabase's table editor export, or
+- Click a poster for the synopsis, cast, trailer and where to stream it.
+  Streaming info is for the UK by default; set `TMDB_REGION` (e.g. `US`) to change it.
+- **Pick for us** on the watchlist spins for a random film, starting with the
+  suggestions of whoever's turn it is (picks alternate, based on the last
+  watched film's "whose pick").
+- Shortcuts: `N` adds a film, `/` jumps to search.
+- Deleting a film shows an **Undo** toast for a few seconds.
+- To back up, use **Export CSV** in the header, Supabase's table editor export, or
   `select * from movies order by watched_on` in the SQL editor.

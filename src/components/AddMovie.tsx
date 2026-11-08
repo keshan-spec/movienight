@@ -6,10 +6,16 @@ import type { TmdbHit } from "@/lib/tmdb";
 import { POSTER } from "@/lib/people";
 import Dialog from "./Dialog";
 import { DateField, NoteField, PickerField, RatingFields } from "./FormFields";
+import { useToast } from "./Toast";
 
 type Mode = "watched" | "watchlist";
 
-export default function AddMovie() {
+const KNOWN_LABEL: Record<Mode, string> = {
+  watched: "Already logged",
+  watchlist: "On the watchlist",
+};
+
+export default function AddMovie({ known = {} }: { known?: Record<number, Mode> }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("watched");
   const [query, setQuery] = useState("");
@@ -18,6 +24,21 @@ export default function AddMovie() {
   const [picked, setPicked] = useState<TmdbHit | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
+  const notify = useToast();
+
+  // Press "n" anywhere (outside a text field) to add a film.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "n" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const el = event.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("dialog[open]")) return;
+      event.preventDefault();
+      setOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!open || picked) return;
@@ -65,17 +86,28 @@ export default function AddMovie() {
   const save = (formData: FormData) => {
     setError(null);
     startSaving(async () => {
+      const title = String(formData.get("title") ?? "");
+      const where = mode === "watched" ? "the log" : "the watchlist";
       const result = await addMovie(formData);
-      if (result.ok) close();
-      else setError(result.message);
+      if (result.ok) {
+        close();
+        notify(`Added ${title} to ${where}`);
+      } else setError(result.message);
     });
   };
 
   const pickedPoster = picked ? POSTER(picked.poster_path, "w185") : null;
+  const pickedKnown = picked?.tmdb_id ? known[picked.tmdb_id] : undefined;
 
   return (
     <>
-      <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
+      <button
+        className="btn btn-primary"
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Add a film (N)"
+      >
+        <span aria-hidden="true" className="btn-plus">+</span>
         Add a film
       </button>
 
@@ -97,6 +129,7 @@ export default function AddMovie() {
               <ul className="results">
                 {hits.map((hit) => {
                   const thumb = POSTER(hit.poster_path, "w92");
+                  const already = known[hit.tmdb_id];
                   return (
                     <li key={hit.tmdb_id}>
                       <button className="result" type="button" onClick={() => setPicked(hit)}>
@@ -110,6 +143,11 @@ export default function AddMovie() {
                           <span className="result-title">{hit.title}</span>{" "}
                           <span className="result-year">{hit.year ?? ""}</span>
                         </span>
+                        {already ? (
+                          <span className="result-known" data-status={already}>
+                            {KNOWN_LABEL[already]}
+                          </span>
+                        ) : null}
                       </button>
                     </li>
                   );
@@ -154,6 +192,13 @@ export default function AddMovie() {
                 Change
               </button>
             </div>
+
+            {pickedKnown ? (
+              <p className="hint notice" data-tone="warn">
+                Heads up: this one is {pickedKnown === "watched" ? "already in your log" : "already on your watchlist"}.
+                You can still add it again, for a rewatch.
+              </p>
+            ) : null}
 
             <div className="segmented" role="group" aria-label="Where does this go?">
               <button
